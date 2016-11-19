@@ -1,0 +1,22 @@
+<RCC>
+    <qresource prefix="/Icons">
+        <file>view-refresh.png</file>
+        <file>computer.png</file>
+        <file>folder.png</file>
+        <file>document-properties.png</file>
+        <file>edit-delete.png</file>
+        <file>network-transmit-receive.png</file>
+        <file>network-offline.png</file>
+        <file>document-new.png</file>
+        <file>edit-clear.png</file>
+        <file>edit-copy.png</file>
+        <file>edit-cut.png</file>
+        <file>edit-paste.png</file>
+        <file>system-log-out.png</file>
+        <file>tab-new.png</file>
+        <file>systemPreferences.png</file>
+    </qresource>
+    <qresource prefix="/fonts">
+        <file>Consolas.ttf</file>
+    </qresource>
+</RCC>
