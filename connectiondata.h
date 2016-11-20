@@ -18,6 +18,7 @@ public:
     int Port;
     QString User;
     QString Pass;
+    bool Dynamic;
 };
 
 #endif // CONNECTIONDATA_H

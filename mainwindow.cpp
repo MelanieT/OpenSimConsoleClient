@@ -10,8 +10,10 @@
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QTreeWidgetItemIterator>
-#include <QDebug>
 #include <QDnsLookup>
+#include <QNetworkAccessManager>
+#include <QNetworkRequest>
+#include <QNetworkReply>
 
 #include "addconndialog.h"
 #include "addgroupdialog.h"
@@ -29,6 +31,8 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+
+    manager = new QNetworkAccessManager(this);
 
     ui->connList->setColumnCount(1);
     ui->connList->setHeaderLabel("Connections");
@@ -66,6 +70,11 @@ MainWindow::MainWindow(QWidget *parent) :
 
         grp->Name = settings.value("Name").toString();
         grp->Uuid = settings.value("Uuid").toUuid();
+        grp->Dynamic = settings.value("Dynamic", QVariant(false)).toBool();
+        grp->Source = settings.value("Source", QVariant("")).toString();
+        grp->User = settings.value("User", QVariant("")).toString();
+        grp->Pass = settings.value("Pass", QVariant("")).toString();
+
         QVariant dnsAddress = settings.value("Dns");
         if (dnsAddress.isValid())
             grp->Dns = QHostAddress(dnsAddress.toString());
@@ -78,6 +87,9 @@ MainWindow::MainWindow(QWidget *parent) :
 
         if (settings.value("Expanded").toBool())
             grpItem->setExpanded(true);
+
+        if (grp->Dynamic)
+            loadGroup(grpItem);
     }
     settings.endArray();
 
@@ -95,6 +107,7 @@ MainWindow::MainWindow(QWidget *parent) :
         c->User = settings.value("User").toString();
         c->Pass = settings.value("Pass").toString();
         c->Uuid = settings.value("Uuid").toUuid();
+        c->Dynamic = false;
 
         connections[c->Uuid] = c;
 
@@ -116,6 +129,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
         connItem->setIcon(0, QIcon(":/Icons/computer.png"));
         connItem->setData(0, Qt::UserRole, c->Uuid);
+        connItem->setFlags(connItem->flags() | Qt::ItemIsEditable);
     }
     settings.endArray();
 
@@ -247,6 +261,10 @@ void MainWindow::on_action_Edit_triggered()
         dlg.Name->setEnabled(false);
         dlg.Name->setText(g->Name);
         dlg.Dns->setText(g->Dns.toString());
+        dlg.Dynamic->setChecked(g->Dynamic);
+        dlg.Source->setText(g->Source);
+        dlg.User->setText(g->User);
+        dlg.Pass->setText(g->Pass);
 
         if (dlg.exec() < 0)
             return;
@@ -255,6 +273,23 @@ void MainWindow::on_action_Edit_triggered()
             g->Dns = QHostAddress(dlg.Dns->text());
         else
             g->Dns = QHostAddress();
+
+        bool reload = false;
+        if (dlg.Dynamic && (dlg.Dynamic->isChecked() != g->Dynamic))
+            reload = true;
+
+        if (g->Dynamic && (dlg.Source->text() != g->Source))
+            reload = true;
+
+        g->Dynamic = dlg.Dynamic->isChecked();
+        g->Source = dlg.Source->text();
+        g->User = dlg.User->text();
+        g->Pass = dlg.Pass->text();
+
+        while (item->childCount())
+            delete item->child(0);
+
+        loadGroup(item);
     }
 
     WriteSettings();
@@ -387,16 +422,23 @@ void MainWindow::WriteSettings()
         if (!(*it)->Dns.isNull())
             settings.setValue("Dns", (*it)->Dns.toString());
         settings.setValue("Expanded", QVariant(grpItem->isExpanded()));
+        settings.setValue("Dynamic", QVariant((*it)->Dynamic));
+        settings.setValue("Source", QVariant((*it)->Source));
+        settings.setValue("User", QVariant((*it)->User));
+        settings.setValue("Pass", QVariant((*it)->Pass));
     }
 
     settings.endArray();
 
-    settings.beginWriteArray(QString("Connections"), connections.count());
+    settings.beginWriteArray(QString("Connections"));
 
     idx = 0;
     for (QMap<QUuid, ConnectionData *>::iterator it = connections.begin() ; it != connections.end() ; it++, idx++)
     {
         QUuid parent;
+
+        if ((*it)->Dynamic)
+            continue;
 
         if (!(*it)->Uuid.isNull())
         {
@@ -405,17 +447,29 @@ void MainWindow::WriteSettings()
                 continue;
 
             if (item->parent() != 0)
+            {
                 parent = item->parent()->data(0, Qt::UserRole).toUuid();
-        }
 
-        settings.setArrayIndex(idx);
-        settings.setValue("Uuid", QVariant((*it)->Uuid));
-        settings.setValue("Name", QVariant((*it)->Name));
-        settings.setValue("Host", QVariant((*it)->Host));
-        settings.setValue("Port", QVariant((*it)->Port));
-        settings.setValue("User", QVariant((*it)->User));
-        settings.setValue("Pass", QVariant((*it)->Pass));
-        settings.setValue("Parent", (QVariant(parent)));
+                // Check for a dynamic group. We don't save those connections
+                if (groups.contains(parent))
+                {
+                    if (groups[parent]->Dynamic)
+                        continue;
+                }
+            }
+            settings.setArrayIndex(idx);
+            settings.setValue("Uuid", QVariant((*it)->Uuid));
+            settings.setValue("Name", QVariant((*it)->Name));
+            settings.setValue("Host", QVariant((*it)->Host));
+            settings.setValue("Port", QVariant((*it)->Port));
+            settings.setValue("User", QVariant((*it)->User));
+            settings.setValue("Pass", QVariant((*it)->Pass));
+            settings.setValue("Parent", (QVariant(parent)));
+        }
+        else
+        {
+            idx--;
+        }
     }
 
     settings.endArray();
@@ -476,12 +530,24 @@ void MainWindow::ConnContext(const QPoint &pos)
     {
         connect (ctx.addAction("Add ..."), SIGNAL(triggered()), this, SLOT(addRootConnection()));
     }
-    if (item != 0)
+    ConnectionData *conn = 0;
+    QUuid uuid = item->data(0, Qt::UserRole).toUuid();
+    if (!uuid.isNull() && connections.contains(uuid))
+        conn = connections[uuid];
+
+    if (item != 0 && (conn == 0 || conn->Dynamic == false))
+    {
         connect (ctx.addAction("Edit ..."), SIGNAL(triggered()), ui->action_Edit, SLOT(trigger()));
+    }
     if (item != 0 && item->type() != GroupItem)
-        connect (ctx.addAction("Delete"), SIGNAL(triggered()), ui->actionDelete, SLOT(trigger()));
+    {
+        if (conn == 0 || (!conn->Dynamic))
+            connect (ctx.addAction("Delete"), SIGNAL(triggered()), ui->actionDelete, SLOT(trigger()));
+    }
     else if (item != 0 && item->childCount() == 0)
+    {
         connect (ctx.addAction("Delete"), SIGNAL(triggered()), ui->actionDelete_group, SLOT(trigger()));
+    }
     ctx.addSeparator();
     connect (ctx.addAction("Add Group..."), SIGNAL(triggered()), ui->actionNew_group, SLOT(trigger()));
 
@@ -647,6 +713,7 @@ ConnectionData *MainWindow::createConnection()
     c->User = dlg.User->text();
     c->Pass = dlg.Pass->text();
     c->Uuid = QUuid::createUuid();
+    c->Dynamic = false;
 
     connections[c->Uuid.toString()] = c;
 
@@ -670,6 +737,16 @@ void MainWindow::addChildConnection()
     QTreeWidgetItem *parent = selectedItem();
 
     if (parent == 0)
+        return;
+
+    if (parent->type() != GroupItem)
+        return;
+
+    QUuid uuid = parent->data(0, Qt::UserRole).toUuid();
+    if (!groups.contains(uuid))
+        return;
+    GroupData *g = groups[uuid];
+    if (g->Dynamic)
         return;
 
     ConnectionData *c = createConnection();
@@ -730,6 +807,8 @@ void MainWindow::on_actionDelete_triggered()
     if (connections.contains(id))
     {
         ConnectionData *c = connections[id];
+        if (c->Dynamic)
+            return;
         connections.remove(c->Uuid);
         delete c;
     }
@@ -764,4 +843,92 @@ void MainWindow::on_action_Preferences_triggered()
     systemFont = dlg.ui->useSystemFonts->isChecked();
 
     WriteSettings();
+}
+
+void MainWindow::loadGroup(QTreeWidgetItem *item)
+{
+    QUuid grpUuid = item->data(0, Qt::UserRole).toUuid();
+
+    GroupData *grp = groups[grpUuid];
+
+    QUrl url(grp->Source);
+    if (!url.isValid())
+        return;
+
+    QNetworkRequest req(url);
+    req.setAttribute(QNetworkRequest::FollowRedirectsAttribute, true);
+    QNetworkReply *reply = manager->get(req);
+    reply->setProperty("Group", grpUuid);
+    connect(reply, SIGNAL(finished()), this, SLOT(groupLoaded()));
+}
+
+void MainWindow::groupLoaded()
+{
+    QNetworkReply *reply = qobject_cast<QNetworkReply*>(sender());
+
+    if (reply->error() != QNetworkReply::NoError)
+        return;
+
+    QUuid grpUuid = reply->property("Group").toUuid();
+    if (grpUuid.isNull())
+        return;
+
+    QTreeWidgetItem *grpItem = findItem(grpUuid);
+    if (!grpItem)
+        return;
+
+    if (!groups.contains(grpUuid))
+        return;
+
+    GroupData *grp = groups[grpUuid];
+
+    QString members = QString(reply->readAll());
+
+    QList<QString> lines = members.split("\n");
+
+    ui->connList->blockSignals(true);
+
+    QString line;
+    foreach (line, lines)
+    {
+        QList<QString> pieces = line.split(" ");
+        if (pieces.count() < 2)
+            continue;
+        QString host = pieces[0];
+        pieces.removeFirst();
+        QString name = pieces.join(" ");
+        if (name.trimmed() == "")
+            continue;
+
+        int port = 9000;
+        QList<QString> addrparts = host.split(":");
+        if (addrparts.count() > 1)
+        {
+            host = addrparts[0];
+            port = addrparts[1].toInt();
+        }
+
+        ConnectionData *c = new ConnectionData();
+        c->Name = name;
+        c->Uuid = QUuid::createUuid();
+        c->Group = grp->Uuid;
+        c->Host = host;
+        c->Port = port;
+        c->User = grp->User;
+        c->Pass = grp->Pass;
+        c->Dynamic = true;
+
+        connections[c->Uuid] = c;
+
+        // Dynamic items are not editable
+        QTreeWidgetItem *item = new QTreeWidgetItem(grpItem, QStringList(name), ConnectionItem);
+        item->setData(0, Qt::UserRole, c->Uuid);
+        item->setIcon(0, QIcon(":/Icons/computer.png"));
+
+    }
+
+    ui->connList->blockSignals(false);
+    ui->connList->sortByColumn(0, Qt::AscendingOrder);
+
+    reply->deleteLater();
 }

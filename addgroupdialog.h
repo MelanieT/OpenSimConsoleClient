@@ -4,6 +4,7 @@
 #include <QDialog>
 
 class QLineEdit;
+class QCheckBox;
 
 namespace Ui {
 class AddGroupDialog;
@@ -19,6 +20,10 @@ public:
 
     QLineEdit *Name;
     QLineEdit *Dns;
+    QCheckBox *Dynamic;
+    QLineEdit *Source;
+    QLineEdit *User;
+    QLineEdit *Pass;
 
 protected slots:
     void OnOK();

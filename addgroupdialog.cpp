@@ -9,6 +9,10 @@ AddGroupDialog::AddGroupDialog(QWidget *parent) :
 
     Name = ui->Name;
     Dns = ui->Dns;
+    Dynamic = ui->dynamic;
+    Source = ui->source;
+    User = ui->user;
+    Pass = ui->pass;
 
     connect(ui->buttonBox, SIGNAL(accepted()), this, SLOT(OnOK()));
     connect(ui->buttonBox, SIGNAL(rejected()), this, SLOT(OnCancel()));

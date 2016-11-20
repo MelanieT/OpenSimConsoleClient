@@ -13,6 +13,8 @@ class QTreeWidgetItem;
 class ConnectionData;
 class GroupData;
 class QSettings;
+class QNetworkAccessManager;
+class QNetworkReply;
 
 namespace Ui {
 class MainWindow;
@@ -73,11 +75,14 @@ protected:
     void AddNewTab(GroupData *grp, ConnectionData *conn, QHostAddress addr);
     bool blackOnWhite;
     bool systemFont;
+    QNetworkAccessManager *manager;
 
+    void loadGroup(QTreeWidgetItem *item);
 protected slots:
     void addRootConnection();
     void addChildConnection();
     void treeWidgetItemChanged(QTreeWidgetItem *item, int column);
+    void groupLoaded();
 private:
     QTreeWidgetItem *findOrAddGroup(QString groupName);
     Ui::MainWindow *ui;

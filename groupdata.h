@@ -13,6 +13,11 @@ public:
     QUuid Uuid;
     QString Name;
     QHostAddress Dns;
+
+    bool Dynamic;
+    QString Source;
+    QString User;
+    QString Pass;
 };
 
 #endif // GROUPDATA_H
