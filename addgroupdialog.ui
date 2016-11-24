@@ -151,12 +151,12 @@
      <rect>
       <x>10</x>
       <y>140</y>
-      <width>59</width>
+      <width>101</width>
       <height>16</height>
      </rect>
     </property>
     <property name="text">
-     <string>TextLabel</string>
+     <string>Password</string>
     </property>
    </widget>
    <widget class="QLineEdit" name="pass">

@@ -81,11 +81,14 @@ protected:
 
     void loadGroup(QTreeWidgetItem *item);
     void showEvent(QShowEvent *event);
+    void reloadGroup(QTreeWidgetItem *item);
+    void clearGroup(QTreeWidgetItem *item);
 protected slots:
     void addRootConnection();
     void addChildConnection();
     void treeWidgetItemChanged(QTreeWidgetItem *item, int column);
     void groupLoaded();
+    void onRefreshDynamicItem();
 private:
     QTreeWidgetItem *findOrAddGroup(QString groupName);
     Ui::MainWindow *ui;

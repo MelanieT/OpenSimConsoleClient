@@ -298,10 +298,8 @@ void MainWindow::on_action_Edit_triggered()
         g->User = dlg.User->text();
         g->Pass = dlg.Pass->text();
 
-        while (item->childCount())
-            delete item->child(0);
-
-        loadGroup(item);
+        if (reload)
+            reloadGroup(item);
     }
 
     WriteSettings();
@@ -521,50 +519,68 @@ void MainWindow::ConnContext(const QPoint &pos)
         item->setSelected(true);
 
     QMenu ctx("Connection actions", this);
-    if (item != 0)
+    if (!item)
     {
-        if (item->type() == GroupItem)
+        connect (ctx.addAction("Add ..."), SIGNAL(triggered()), this, SLOT(addRootConnection()));
+        connect (ctx.addAction("Add Group..."), SIGNAL(triggered()), ui->actionNew_group, SLOT(trigger()));
+    }
+    else
+    {
+        QUuid uuid = item->data(0, Qt::UserRole).toUuid();
+        if (uuid.isNull())
+            return;
+
+        // Connection items
+        if (item->type() == ConnectionItem)
         {
-            if (item->childCount() > 0)
+            ConnectionData *conn = 0;
+            if (connections.contains(uuid))
+                conn = connections[uuid];
+
+            if (conn != 0)
+            {
+                connect (ctx.addAction("Connect"), SIGNAL(triggered()), ui->action_Connect, SLOT(trigger()));
+                ctx.addSeparator();
+                // Existing in the database and not dynamic
+                if (!conn->Dynamic)
+                    connect (ctx.addAction("Edit ..."), SIGNAL(triggered()), ui->action_Edit, SLOT(trigger()));
+            }
+
+
+            // Orphan -> we can only delete, else normal connection
+            if (conn == 0 || (!conn->Dynamic))
+                connect (ctx.addAction("Delete"), SIGNAL(triggered()), ui->actionDelete, SLOT(trigger()));
+        }
+        else if(item->type() == GroupItem)
+        {
+            GroupData *grp = 0;
+            if (groups.contains(uuid))
+                grp = groups[uuid];
+
+            if (grp && item->childCount() > 0)
             {
                 connect (ctx.addAction("Connect Group"), SIGNAL(triggered()), ui->action_Connect, SLOT(trigger()));
                 ctx.addSeparator();
             }
-        }
-        else
-        {
-            connect (ctx.addAction("Connect"), SIGNAL(triggered()), ui->action_Connect, SLOT(trigger()));
-            ctx.addSeparator();
-        }
-        connect (ctx.addAction("Add ..."), SIGNAL(triggered()), ui->action_New, SLOT(trigger()));
-    }
-    else
-    {
-        connect (ctx.addAction("Add ..."), SIGNAL(triggered()), this, SLOT(addRootConnection()));
-    }
-    ConnectionData *conn = 0;
-    if (item)
-    {
-        QUuid uuid = item->data(0, Qt::UserRole).toUuid();
-        if (!uuid.isNull() && connections.contains(uuid))
-            conn = connections[uuid];
-    }
 
-    if (item != 0 && (conn == 0 || conn->Dynamic == false))
-    {
-        connect (ctx.addAction("Edit ..."), SIGNAL(triggered()), ui->action_Edit, SLOT(trigger()));
+            if (grp)
+            {
+                if (!grp->Dynamic)
+                    connect (ctx.addAction("Add ..."), SIGNAL(triggered()), ui->action_New, SLOT(trigger()));
+                connect(ctx.addAction("Edit ..."), SIGNAL(triggered()), ui->action_Edit, SLOT(trigger()));
+                if (grp->Dynamic)
+                {
+                    ctx.addSeparator();
+                    connect (ctx.addAction("Refresh"), SIGNAL(triggered()), this, SLOT(onRefreshDynamicItem()));
+                }
+            }
+
+            if (item->childCount() == 0 || (grp && grp->Dynamic))
+                connect (ctx.addAction("Delete"), SIGNAL(triggered()), ui->actionDelete_group, SLOT(trigger()));
+        }
+        ctx.addSeparator();
+        connect (ctx.addAction("Add Group..."), SIGNAL(triggered()), ui->actionNew_group, SLOT(trigger()));
     }
-    if (item != 0 && item->type() != GroupItem)
-    {
-        if (conn == 0 || (!conn->Dynamic))
-            connect (ctx.addAction("Delete"), SIGNAL(triggered()), ui->actionDelete, SLOT(trigger()));
-    }
-    else if (item != 0 && item->childCount() == 0)
-    {
-        connect (ctx.addAction("Delete"), SIGNAL(triggered()), ui->actionDelete_group, SLOT(trigger()));
-    }
-    ctx.addSeparator();
-    connect (ctx.addAction("Add Group..."), SIGNAL(triggered()), ui->actionNew_group, SLOT(trigger()));
 
     ctx.exec(ui->connList->mapToGlobal(pos));
 }
@@ -650,8 +666,10 @@ GroupData *MainWindow::createGroup()
 {
     GroupData *grp = new GroupData();
 
+
     grp->Uuid = QUuid::createUuid();
     grp->Name = "New group";
+    grp->Dynamic = false;
 
     groups[grp->Uuid] = grp;
 
@@ -909,11 +927,7 @@ void MainWindow::groupLoaded()
         QList<QString> pieces = line.split(" ");
         if (pieces.count() < 2)
             continue;
-        QString name = pieces[0];
-        if (name.trimmed() == "")
-            continue;
-
-        QString host = pieces[1];
+        QString host = pieces[0];
 
         int port = 9000;
         QList<QString> addrparts = host.split(":");
@@ -922,6 +936,13 @@ void MainWindow::groupLoaded()
             host = addrparts[0];
             port = addrparts[1].toInt();
         }
+
+        pieces.removeFirst();
+        QString name = pieces.join(" ");
+        if (name.trimmed() == "")
+            continue;
+
+        name[0] = name[0].toUpper();
 
         ConnectionData *c = new ConnectionData();
         c->Name = name;
@@ -953,4 +974,34 @@ void MainWindow::on_action_About_triggered()
     SplashDialog dlg;
 
     dlg.exec();
+}
+
+void MainWindow::onRefreshDynamicItem()
+{
+    QTreeWidgetItem *item = selectedItem();
+
+    if (item == 0 || item->type() != GroupItem)
+        return;
+
+    reloadGroup(item);
+}
+
+void MainWindow::clearGroup(QTreeWidgetItem *item)
+{
+    while (item->childCount())
+        delete item->child(0);
+
+    QUuid id = item->data(0, Qt::UserRole).toUuid();
+
+    for (QMap<QUuid, ConnectionData *>::Iterator it = connections.begin() ; it != connections.end() ; ++it)
+    {
+        if ((*it)->Group == id)
+            connections.remove(it.key());
+    }
+}
+
+void MainWindow::reloadGroup(QTreeWidgetItem *item)
+{
+    clearGroup(item);
+    loadGroup(item);
 }
