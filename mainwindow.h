@@ -59,6 +59,8 @@ private slots:
 
     void on_action_Preferences_triggered();
 
+    void on_action_About_triggered();
+
 public:
 protected:
     QMap<QUuid, ConnectionData *> connections;
@@ -78,6 +80,7 @@ protected:
     QNetworkAccessManager *manager;
 
     void loadGroup(QTreeWidgetItem *item);
+    void showEvent(QShowEvent *event);
 protected slots:
     void addRootConnection();
     void addChildConnection();

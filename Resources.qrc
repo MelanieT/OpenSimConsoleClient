@@ -15,6 +15,7 @@
         <file>system-log-out.png</file>
         <file>tab-new.png</file>
         <file>systemPreferences.png</file>
+        <file>Splash.png</file>
     </qresource>
     <qresource prefix="/fonts">
         <file>Consolas.ttf</file>

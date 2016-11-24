@@ -14,11 +14,13 @@
 #include <QNetworkAccessManager>
 #include <QNetworkRequest>
 #include <QNetworkReply>
+#include <QShowEvent>
 
 #include "addconndialog.h"
 #include "addgroupdialog.h"
 #include "preferencesdialog.h"
 #include "ui_preferencesdialog.h"
+#include "splashdialog.h"
 
 enum ItemType
 {
@@ -145,6 +147,16 @@ MainWindow::~MainWindow()
     // No need to free anything as the OS does it for us
 
     delete ui;
+}
+
+void MainWindow::showEvent(QShowEvent *event)
+{
+    if (!event->spontaneous())
+    {
+        SplashDialog *dlg = new SplashDialog(this, Qt::SplashScreen);
+        dlg->isSplash = true;
+        dlg->show();
+    }
 }
 
 void MainWindow::on_action_Exit_triggered()
@@ -531,9 +543,12 @@ void MainWindow::ConnContext(const QPoint &pos)
         connect (ctx.addAction("Add ..."), SIGNAL(triggered()), this, SLOT(addRootConnection()));
     }
     ConnectionData *conn = 0;
-    QUuid uuid = item->data(0, Qt::UserRole).toUuid();
-    if (!uuid.isNull() && connections.contains(uuid))
-        conn = connections[uuid];
+    if (item)
+    {
+        QUuid uuid = item->data(0, Qt::UserRole).toUuid();
+        if (!uuid.isNull() && connections.contains(uuid))
+            conn = connections[uuid];
+    }
 
     if (item != 0 && (conn == 0 || conn->Dynamic == false))
     {
@@ -894,11 +909,11 @@ void MainWindow::groupLoaded()
         QList<QString> pieces = line.split(" ");
         if (pieces.count() < 2)
             continue;
-        QString host = pieces[0];
-        pieces.removeFirst();
-        QString name = pieces.join(" ");
+        QString name = pieces[0];
         if (name.trimmed() == "")
             continue;
+
+        QString host = pieces[1];
 
         int port = 9000;
         QList<QString> addrparts = host.split(":");
@@ -931,4 +946,11 @@ void MainWindow::groupLoaded()
     ui->connList->sortByColumn(0, Qt::AscendingOrder);
 
     reply->deleteLater();
+}
+
+void MainWindow::on_action_About_triggered()
+{
+    SplashDialog dlg;
+
+    dlg.exec();
 }

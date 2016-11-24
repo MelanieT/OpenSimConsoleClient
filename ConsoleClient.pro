@@ -19,7 +19,8 @@ SOURCES += main.cpp\
     addconndialog.cpp \
     groupdata.cpp \
     addgroupdialog.cpp \
-    preferencesdialog.cpp
+    preferencesdialog.cpp \
+    splashdialog.cpp
 
 HEADERS  += mainwindow.h \
     connectionpane.h \
@@ -27,13 +28,19 @@ HEADERS  += mainwindow.h \
     addconndialog.h \
     groupdata.h \
     addgroupdialog.h \
-    preferencesdialog.h
+    preferencesdialog.h \
+    splashdialog.h
 
 FORMS    += mainwindow.ui \
     connectionpane.ui \
     addconndialog.ui \
     addgroupdialog.ui \
-    preferencesdialog.ui
+    preferencesdialog.ui \
+    splashdialog.ui
 
 RESOURCES += \
     Resources.qrc
+
+ICON = ConsoleClient.icns
+
+RC_ICONS = ConsoleClient.ico
