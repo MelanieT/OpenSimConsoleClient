@@ -34,4 +34,10 @@ void SplashDialog::paintEvent(QPaintEvent *)
     QImage img(":/Icons/Splash.png");
 
     p.drawImage(0, 0, img);
+
+    if (isSplash)
+    {
+        p.setPen(QPen(QColor(0, 0, 0)));
+        p.drawRect(0, 0, width() - 1, height() - 1);
+    }
 }
